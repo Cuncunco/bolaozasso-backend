@@ -48,36 +48,39 @@ export async function poolRoutes(fastify: FastifyInstance) {
   // POST /pools  (criar bolão)
   // ===============================
   fastify.post(
-  "/pools",
-  { preHandler: [requireAuth] },
-  async (request, reply) => {
-    const createPoolBody = z.object({
-      title: z.string(),
-    });
+    "/pools",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const createPoolBody = z.object({
+        title: z.string(),
+      });
 
-    const { title } = createPoolBody.parse(request.body);
+      const { title } = createPoolBody.parse(request.body);
 
-    const uid = new ShortUniqueId({ length: 6 });
-    const code = uid.rnd().toUpperCase();
+      const uid = new ShortUniqueId({ length: 6 });
+      const code = uid.rnd().toUpperCase();
 
-    const userId = (request as any).userId as string;
+      const userId = (request as any).userId as string;
 
-    await prisma.pool.create({
-      data: {
-        title,
-        code,
-        ownerId: userId,
-        participants: {
-          create: {
-            userId,
+      const pool = await prisma.pool.create({
+        data: {
+          title,
+          code,
+          ownerId: userId,
+          participants: {
+            create: {
+              userId,
+            },
           },
         },
-      },
-    });
+        select: {
+          code: true,
+        },
+      });
 
-    return reply.status(201).send({ code });
-  }
-);
+      return reply.status(201).send(pool);
+    }
+  );
 
   // ===============================
   // POST /pools/join
@@ -94,6 +97,7 @@ export async function poolRoutes(fastify: FastifyInstance) {
 
       const pool = await prisma.pool.findUnique({
         where: { code: code.trim().toUpperCase() },
+        select: { id: true },
       });
 
       if (!pool) {
@@ -123,6 +127,58 @@ export async function poolRoutes(fastify: FastifyInstance) {
       });
 
       return reply.code(201).send();
+    }
+  );
+
+ 
+  fastify.get(
+    "/pools/:poolId",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const getPoolParams = z.object({
+        poolId: z.string(),
+      });
+
+      const { poolId } = getPoolParams.parse(request.params);
+      const userId = (request as any).userId as string;
+
+      const pool = await prisma.pool.findFirst({
+        where: {
+          id: poolId,
+          participants: {
+            some: {
+              userId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          title: true,
+          code: true,
+          createdAt: true,
+          ownerId: true,
+          owner: {
+            select: { name: true },
+          },
+          participants: {
+            select: {
+              id: true,
+              user: { select: { avatarUrl: true } },
+            },
+            take: 4,
+          },
+          _count: {
+            select: { participants: true },
+          },
+        },
+      });
+
+      if (!pool) {
+        
+        return reply.code(404).send({ message: "Pool not found." });
+      }
+
+      return reply.send({ pool });
     }
   );
 }
