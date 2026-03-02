@@ -130,7 +130,9 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
- 
+  // ===============================
+  // GET /pools/:poolId (detalhes)
+  // ===============================
   fastify.get(
     "/pools/:poolId",
     { preHandler: [requireAuth] },
@@ -174,11 +176,44 @@ export async function poolRoutes(fastify: FastifyInstance) {
       });
 
       if (!pool) {
-        
         return reply.code(404).send({ message: "Pool not found." });
       }
 
       return reply.send({ pool });
+    }
+  );
+
+  // ===============================
+  // GET /pools/:poolId/games
+  // ===============================
+  fastify.get(
+    "/pools/:poolId/games",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const paramsSchema = z.object({ poolId: z.string() });
+      const { poolId } = paramsSchema.parse(request.params);
+
+      const userId = (request as any).userId as string;
+
+      const participant = await prisma.participant.findUnique({
+        where: { userId_poolId: { userId, poolId } },
+      });
+
+      if (!participant) {
+        return reply.code(404).send({ message: "Pool not found." });
+      }
+
+      const games = await prisma.game.findMany({
+        orderBy: { date: "asc" },
+        select: {
+          id: true,
+          date: true,
+          firstTeamCountryCode: true,
+          secondTeamCountryCode: true,
+        },
+      });
+
+      return reply.send({ games });
     }
   );
 }

@@ -1,61 +1,65 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from "../src/lib/prisma.js";
+import bcrypt from "bcryptjs";
 
 async function main() {
-    const user = await prisma.user.create({
-        data: {
-            name: 'John Doe',
-            email: 'johndoe@gmail.com',
-            avatarUrl: 'https://github.com/diego3g.png'
-        }
-    })
+  // =========================
+  // USER SEED
+  // =========================
+  const email = "johndoe@gmail.com";
+  const plainPassword = "123456";
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
 
-    const pool = await prisma.pool.create({
-        data: {
-            title: 'Example pool',
-            code: 'BOL123',
-            ownerId: user.id,
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {
+      name: "John Doe",
+      passwordHash,
+      avatarUrl: "https://github.com/diego3g.png",
+    },
+    create: {
+      name: "John Doe",
+      email,
+      avatarUrl: "https://github.com/diego3g.png",
+      passwordHash,
+    },
+    select: { id: true, name: true, email: true },
+  });
 
-            participants: {
-                create: {
-                    userId: user.id
-                }
-            }
-        }
-    })
+  console.log("✅ Seed user:", user);
 
-    await prisma.game.create({
-        data: {
-            date:'2026-02-06T11:55:21.949Z',
-            firstTeamCountryCode: 'DE',
-            secondTeamCountryCode: 'BR',
-        }
-    })
+  // (Opcional) criar 1 pool + participant pra você já testar palpites
+  const pool = await prisma.pool.upsert({
+    where: { code: "BOLAO-TESTE" },
+    update: { title: "Bolão Teste" },
+    create: {
+      title: "Bolão Teste",
+      code: "BOLAO-TESTE",
+      ownerId: user.id,
+    },
+    select: { id: true, title: true, code: true },
+  });
 
-    await prisma.game.create({
-        data: {
-            date: '2026-02-06T13:55:21.949Z',
-            firstTeamCountryCode:'BR',
-            secondTeamCountryCode: 'AR',
+  console.log("✅ Seed pool:", pool);
 
-            guesses: {
-                create: {
-                    firstTeamPoints: 2,
-                    secondTeamPoints: 1,
+  await prisma.participant.upsert({
+    where: {
+      userId_poolId: { userId: user.id, poolId: pool.id },
+    },
+    update: {},
+    create: {
+      userId: user.id,
+      poolId: pool.id,
+    },
+    select: { id: true, userId: true, poolId: true },
+  });
 
-                    participant: {
-                        connect: {
-                            userId_poolId: {
-                                userId: user.id,
-                                poolId: pool.id,
-                            }
-                        }
-                    }
-                }
-            }
-        },
-    })
+  console.log("✅ Seed participant ok");
 }
 
 main()
+  .then(async () => prisma.$disconnect())
+  .catch(async (e) => {
+    console.error("❌ Seed error:", e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });

@@ -7,24 +7,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Pool {
-  id          String   @id @default(cuid())
-  title       String
-  code        String   @unique
-  createdAt   DateTime @default(now())
-  ownerId     String?
+model GameResult {
+  id               String   @id @default(cuid())
+  gameId           String   @unique
+  firstTeamPoints  Int
+  secondTeamPoints Int
+  updatedAt        DateTime @updatedAt
+}
 
+model Pool {
+  id        String   @id @default(cuid())
+  title     String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  ownerId   String?
 
   participants Participant[]
-  owner        User?   @relation(fields: [ownerId], references: [id])
+  owner        User?         @relation(fields: [ownerId], references: [id])
 }
 
 model Participant {
-  id        String   @id @default(cuid())
-  userId    String
-  poolId    String
+  id     String @id @default(cuid())
+  userId String
+  poolId String
 
   guesses Guess[]
+
   user User @relation(fields: [userId], references: [id])
   pool Pool @relation(fields: [poolId], references: [id])
 
@@ -40,30 +48,19 @@ model User {
   createdAt    DateTime @default(now())
 
   participatingAt Participant[]
-  ownPools         Pool[]
-}
-
-
-model Game {
-  id                    String  @id @default(cuid())
-  date                  DateTime
-
-  firstTeamCountryCode  String
-  secondTeamCountryCode String
-
-  guesses               Guess[]
+  ownPools        Pool[]
 }
 
 model Guess {
-  id String   @id @default(cuid())
+  id               String   @id @default(cuid())
+  firstTeamPoints  Int
+  secondTeamPoints Int
+  createdAt        DateTime @default(now())
 
-  firstTeamPoints   Int
-  secondTeamPoints  Int
-  createdAt         DateTime @default(now())
-  gameId            String
-  participantId     String
+  gameId        String
+  participantId String
 
-  participant     Participant  @relation(fields: [participantId], references: [id])
-  game            Game         @relation(fields: [gameId], references: [id])
- 
+  participant Participant @relation(fields: [participantId], references: [id])
+
+  @@unique([participantId, gameId])
 }

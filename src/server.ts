@@ -9,7 +9,7 @@ import { userRoutes } from "./routes/user.js"
 import { guessRoutes } from "./routes/guess.js"
 import { gameRoutes } from "./routes/game.js"
 import { authRoutes } from "./routes/auth.js"
-
+import { rankingRoutes } from "./routes/ranking.js";
 
 
 async function bootstrap() {
@@ -18,7 +18,7 @@ async function bootstrap() {
   await fastify.register(cors, {
     origin: true,
   })
-
+await fastify.register(rankingRoutes);
 await fastify.register(poolRoutes)
 await fastify.register(authRoutes)
 await fastify.register(gameRoutes)
