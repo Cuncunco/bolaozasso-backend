@@ -1,10 +1,13 @@
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "es2020",
+    "moduleResolution": "Bundler",
     "target": "es2020",
 
     "types": ["node"],
+
+    "rootDir": "src",
+    "outDir": "dist",
 
     "sourceMap": true,
     "declaration": true,
@@ -13,11 +16,14 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
 
+    "esModuleInterop": true,
     "strict": true,
     "verbatimModuleSyntax": false,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true
-  }
+  },
+
+  "include": ["src"]
 }

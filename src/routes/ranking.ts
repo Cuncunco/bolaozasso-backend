@@ -1,24 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { z } from "zod";
-import jwt from "jsonwebtoken";
 import { requireAuth } from "../middlewares/requireAuth.js";
-
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("JWT_SECRET not set");
-
-function getUserIdFromAuthHeader(authHeader?: string) {
-  if (!authHeader) return null;
-  const token = authHeader.split(" ")[1];
-  if (!token) return null;
-
-  try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    return decoded.sub as string;
-  } catch {
-    return null;
-  }
-}
 
 function pointsForGuess(
   g1: number,
@@ -33,128 +16,114 @@ function pointsForGuess(
   const guessDiff = g1 - g2;
   const realDiff = r1 - r2;
 
-  const guessOutcome = guessDiff === 0 ? "draw" : guessDiff > 0 ? "home" : "away";
-  const realOutcome = realDiff === 0 ? "draw" : realDiff > 0 ? "home" : "away";
+  const guessOutcome =
+    guessDiff === 0 ? "draw" : guessDiff > 0 ? "home" : "away";
+
+  const realOutcome =
+    realDiff === 0 ? "draw" : realDiff > 0 ? "home" : "away";
 
   return guessOutcome === realOutcome ? 1 : 0;
 }
 
 export async function rankingRoutes(fastify: FastifyInstance) {
 
+  // 🔥 Definir resultado oficial
   fastify.put(
-  "/pools/:poolId/games/:gameId/result",
-  { preHandler: [requireAuth] },
-  async (request, reply) => {
-    const paramsSchema = z.object({
-      poolId: z.string(),
-      gameId: z.string(),
-    });
+    "/pools/:poolId/games/:gameId/result",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
 
-    const bodySchema = z.object({
-      firstTeamPoints: z.number().int().nonnegative(),
-      secondTeamPoints: z.number().int().nonnegative(),
-    });
+      const paramsSchema = z.object({
+        poolId: z.string(),
+        gameId: z.string(),
+      });
 
-    const { poolId, gameId } = paramsSchema.parse(request.params);
-    const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
+      const bodySchema = z.object({
+        firstTeamPoints: z.number().int().nonnegative(),
+        secondTeamPoints: z.number().int().nonnegative(),
+      });
 
-    const userId = (request as any).userId as string;
+      const { poolId, gameId } = paramsSchema.parse(request.params);
+      const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
 
-    // 🔒 Verifica se é dono do bolão
-    const pool = await prisma.pool.findUnique({
-      where: { id: poolId },
-      select: { ownerId: true },
-    });
+      const userId = (request as any).userId as string;
 
-    if (!pool) {
-      return reply.code(404).send({ message: "Pool not found." });
+      // 🔒 Verifica se é dono do bolão
+      const pool = await prisma.pool.findUnique({
+        where: { id: poolId },
+        select: { ownerId: true },
+      });
+
+      if (!pool) {
+        return reply.code(404).send({ message: "Pool not found." });
+      }
+
+      if (pool.ownerId !== userId) {
+        return reply
+          .code(403)
+          .send({ message: "Apenas o admin pode definir o resultado." });
+      }
+
+      const result = await prisma.gameResult.upsert({
+        where: { gameId },
+        update: {
+          firstTeamPoints,
+          secondTeamPoints,
+        },
+        create: {
+          gameId,
+          firstTeamPoints,
+          secondTeamPoints,
+        },
+      });
+
+      return reply.send({ result });
     }
+  );
 
-    if (pool.ownerId !== userId) {
-      return reply.code(403).send({ message: "Apenas o admin pode definir o resultado." });
+  // 🔓 Reabrir palpites (deletar resultado)
+  fastify.delete(
+    "/pools/:poolId/games/:gameId/result",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+
+      const paramsSchema = z.object({
+        poolId: z.string(),
+        gameId: z.string(),
+      });
+
+      const { poolId, gameId } = paramsSchema.parse(request.params);
+      const userId = (request as any).userId as string;
+
+      const pool = await prisma.pool.findUnique({
+        where: { id: poolId },
+        select: { ownerId: true },
+      });
+
+      if (!pool) {
+        return reply.code(404).send({ message: "Pool not found." });
+      }
+
+      if (pool.ownerId !== userId) {
+        return reply
+          .code(403)
+          .send({ message: "Apenas o admin pode reabrir o jogo." });
+      }
+
+      await prisma.gameResult.delete({
+        where: { gameId },
+      });
+
+      return reply.code(204).send();
     }
+  );
 
-    // 🔁 UPSERT (cria ou atualiza)
-    const result = await prisma.gameResult.upsert({
-      where: { gameId },
-      update: {
-        firstTeamPoints,
-        secondTeamPoints,
-      },
-      create: {
-        gameId,
-        firstTeamPoints,
-        secondTeamPoints,
-      },
-    });
-
-    return reply.send({ result });
-  }
-);
-
-fastify.delete(
-  "/pools/:poolId/games/:gameId/result",
-  { preHandler: [requireAuth] },
-  async (request, reply) => {
-    const paramsSchema = z.object({
-      poolId: z.string(),
-      gameId: z.string(),
-    });
-
-    const { poolId, gameId } = paramsSchema.parse(request.params);
-
-    const userId = (request as any).userId as string;
-
-    // 🔒 Verifica se é dono do bolão
-    const pool = await prisma.pool.findUnique({
-      where: { id: poolId },
-      select: { ownerId: true },
-    });
-
-    if (!pool) {
-      return reply.code(404).send({ message: "Pool not found." });
-    }
-
-    if (pool.ownerId !== userId) {
-      return reply.code(403).send({ message: "Apenas o admin pode reabrir o jogo." });
-    }
-
-    await prisma.gameResult.delete({
-      where: { gameId },
-    });
-
-    return reply.code(204).send();
-  }
-);
-  // ✅ endpoint pra cadastrar/atualizar resultado oficial de um jogo
-  fastify.put("/games/:gameId/result", async (request, reply) => {
-    const userId = getUserIdFromAuthHeader(request.headers.authorization);
-    if (!userId) return reply.status(401).send({ message: "Token inválido/ausente" });
-
-    const paramsSchema = z.object({ gameId: z.string() });
-    const bodySchema = z.object({
-      firstTeamPoints: z.number().int().nonnegative(),
-      secondTeamPoints: z.number().int().nonnegative(),
-    });
-
-    const { gameId } = paramsSchema.parse(request.params);
-    const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
-
-    const result = await prisma.gameResult.upsert({
-      where: { gameId },
-      update: { firstTeamPoints, secondTeamPoints },
-      create: { gameId, firstTeamPoints, secondTeamPoints },
-    });
-
-    return reply.status(200).send({ result });
-  });
-
-  // ✅ ranking com pontuação
+  // 📊 Ranking
   fastify.get("/pools/:poolId/ranking", async (request, reply) => {
+
     const paramsSchema = z.object({ poolId: z.string() });
     const { poolId } = paramsSchema.parse(request.params);
 
-    // participantes do bolão
     const participants = await prisma.participant.findMany({
       where: { poolId },
       select: {
@@ -163,70 +132,53 @@ fastify.delete(
       },
     });
 
-    // todos os palpites do bolão
     const guesses = await prisma.guess.findMany({
       where: { participant: { poolId } },
-      select: {
-        participantId: true,
-        gameId: true,
-        firstTeamPoints: true,
-        secondTeamPoints: true,
-      },
     });
 
-    // resultados oficiais (pelos gameIds usados)
-    const gameIds = Array.from(new Set(guesses.map((g) => g.gameId)));
+    const gameIds = Array.from(new Set(guesses.map(g => g.gameId)));
+
     const results = await prisma.gameResult.findMany({
       where: { gameId: { in: gameIds } },
-      select: { gameId: true, firstTeamPoints: true, secondTeamPoints: true },
     });
 
-    const resultByGameId = new Map(results.map((r) => [r.gameId, r]));
+    const resultByGameId = new Map(results.map(r => [r.gameId, r]));
 
-    // soma pontos por participante
-    const scoreByParticipant = new Map<string, { points: number; guesses: number; scoredGuesses: number }>();
+    const scoreByParticipant = new Map<string, number>();
+
     for (const p of participants) {
-      scoreByParticipant.set(p.id, { points: 0, guesses: 0, scoredGuesses: 0 });
+      scoreByParticipant.set(p.id, 0);
     }
 
     for (const g of guesses) {
-      const acc = scoreByParticipant.get(g.participantId);
-      if (!acc) continue;
+      const result = resultByGameId.get(g.gameId);
+      if (!result) continue;
 
-      acc.guesses += 1;
+      const current = scoreByParticipant.get(g.participantId) ?? 0;
 
-      const r = resultByGameId.get(g.gameId);
-      if (!r) continue; // ainda sem resultado oficial
-
-      acc.points += pointsForGuess(
-        g.firstTeamPoints,
-        g.secondTeamPoints,
-        r.firstTeamPoints,
-        r.secondTeamPoints
+      scoreByParticipant.set(
+        g.participantId,
+        current +
+          pointsForGuess(
+            g.firstTeamPoints,
+            g.secondTeamPoints,
+            result.firstTeamPoints,
+            result.secondTeamPoints
+          )
       );
-      acc.scoredGuesses += 1;
     }
 
     const ranking = participants
-      .map((p) => {
-        const acc = scoreByParticipant.get(p.id)!;
-        return {
-          participantId: p.id,
-          user: p.user,
-          points: acc.points,
-          guessesCount: acc.guesses,
-          scoredGuessesCount: acc.scoredGuesses,
-        };
-      })
-      .sort((a, b) => {
-        // 1) pontos desc
-        if (b.points !== a.points) return b.points - a.points;
-        // 2) mais palpites com resultado (desempate)
-        if (b.scoredGuessesCount !== a.scoredGuessesCount) return b.scoredGuessesCount - a.scoredGuessesCount;
-        // 3) mais palpites enviados
-        return b.guessesCount - a.guessesCount;
-      })
-      .map((row, idx) => ({ position: idx + 1, ...row }));
+      .map(p => ({
+        participantId: p.id,
+        user: p.user,
+        points: scoreByParticipant.get(p.id) ?? 0,
+      }))
+      .sort((a, b) => b.points - a.points)
+      .map((row, idx) => ({
+        position: idx + 1,
+        ...row,
+      }));
 
     return reply.send({ ranking });
   });
