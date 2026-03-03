@@ -39,6 +39,7 @@ async function bootstrap() {
   await fastify.register(userRoutes);
 
   const port = Number(process.env.PORT) || 3333;
+  fastify.get("/healthz", async () => ({ ok: true }));
 
   await fastify.listen({
     port,
