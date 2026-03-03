@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
+import { requireAuth } from "../middlewares/requireAuth.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET not set");
@@ -39,6 +40,92 @@ function pointsForGuess(
 }
 
 export async function rankingRoutes(fastify: FastifyInstance) {
+
+  fastify.put(
+  "/pools/:poolId/games/:gameId/result",
+  { preHandler: [requireAuth] },
+  async (request, reply) => {
+    const paramsSchema = z.object({
+      poolId: z.string(),
+      gameId: z.string(),
+    });
+
+    const bodySchema = z.object({
+      firstTeamPoints: z.number().int().nonnegative(),
+      secondTeamPoints: z.number().int().nonnegative(),
+    });
+
+    const { poolId, gameId } = paramsSchema.parse(request.params);
+    const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
+
+    const userId = (request as any).userId as string;
+
+    // 🔒 Verifica se é dono do bolão
+    const pool = await prisma.pool.findUnique({
+      where: { id: poolId },
+      select: { ownerId: true },
+    });
+
+    if (!pool) {
+      return reply.code(404).send({ message: "Pool not found." });
+    }
+
+    if (pool.ownerId !== userId) {
+      return reply.code(403).send({ message: "Apenas o admin pode definir o resultado." });
+    }
+
+    // 🔁 UPSERT (cria ou atualiza)
+    const result = await prisma.gameResult.upsert({
+      where: { gameId },
+      update: {
+        firstTeamPoints,
+        secondTeamPoints,
+      },
+      create: {
+        gameId,
+        firstTeamPoints,
+        secondTeamPoints,
+      },
+    });
+
+    return reply.send({ result });
+  }
+);
+
+fastify.delete(
+  "/pools/:poolId/games/:gameId/result",
+  { preHandler: [requireAuth] },
+  async (request, reply) => {
+    const paramsSchema = z.object({
+      poolId: z.string(),
+      gameId: z.string(),
+    });
+
+    const { poolId, gameId } = paramsSchema.parse(request.params);
+
+    const userId = (request as any).userId as string;
+
+    // 🔒 Verifica se é dono do bolão
+    const pool = await prisma.pool.findUnique({
+      where: { id: poolId },
+      select: { ownerId: true },
+    });
+
+    if (!pool) {
+      return reply.code(404).send({ message: "Pool not found." });
+    }
+
+    if (pool.ownerId !== userId) {
+      return reply.code(403).send({ message: "Apenas o admin pode reabrir o jogo." });
+    }
+
+    await prisma.gameResult.delete({
+      where: { gameId },
+    });
+
+    return reply.code(204).send();
+  }
+);
   // ✅ endpoint pra cadastrar/atualizar resultado oficial de um jogo
   fastify.put("/games/:gameId/result", async (request, reply) => {
     const userId = getUserIdFromAuthHeader(request.headers.authorization);

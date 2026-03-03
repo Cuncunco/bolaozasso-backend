@@ -28,7 +28,6 @@ export async function guessRoutes(fastify: FastifyInstance) {
     const { poolId, gameId } = paramsSchema.parse(request.params)
     const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body)
 
-    // 🔐 AQUI entra a validação simples do token
     const authHeader = request.headers.authorization
     if (!authHeader) {
       return reply.status(401).send({ message: "Token não informado" })
@@ -45,6 +44,17 @@ export async function guessRoutes(fastify: FastifyInstance) {
 
     const userId = decoded.sub as string
 
+        const resultExists = await prisma.gameResult.findUnique({
+      where: { gameId },
+      select: { id: true },
+    });
+
+    if (resultExists) {
+      return reply
+        .code(409)
+        .send({ message: "Palpites encerrados: o resultado já foi definido." });
+    }
+
     // Buscar participante
     const participant = await prisma.participant.findUnique({
       where: {
@@ -56,14 +66,24 @@ export async function guessRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ message: "Você não participa desse bolão." })
     }
 
-    const guess = await prisma.guess.create({
-      data: {
-        firstTeamPoints,
-        secondTeamPoints,
-        gameId,
-        participantId: participant.id,
-      },
-    })
+    const guess = await prisma.guess.upsert({
+  where: {
+    participantId_gameId: {
+      participantId: participant.id,
+      gameId,
+    },
+  },
+  update: {
+    firstTeamPoints,
+    secondTeamPoints,
+  },
+  create: {
+    firstTeamPoints,
+    secondTeamPoints,
+    gameId,
+    participantId: participant.id,
+  },
+});
 
     return reply.status(201).send(guess)
   })

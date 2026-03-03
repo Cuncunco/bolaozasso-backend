@@ -5,48 +5,66 @@ import ShortUniqueId from "short-unique-id";
 import { requireAuth } from "../middlewares/requireAuth.js";
 
 export async function poolRoutes(fastify: FastifyInstance) {
-  // ===============================
-  // GET /pools/count
-  // ===============================
-  fastify.get("/pools/count", async () => {
-    const count = await prisma.pool.count();
-    return { count };
-  });
+  
+  fastify.get(
+    "/pools/count",
+    { preHandler: [requireAuth] },
+    async (request) => {
+      const userId = (request as any).userId as string;
 
-  // ===============================
-  // GET /pools
-  // ===============================
-  fastify.get("/pools", async () => {
-    const pools = await prisma.pool.findMany({
-      select: {
-        id: true,
-        title: true,
-        code: true,
-        createdAt: true,
-        ownerId: true,
-        owner: {
-          select: { name: true },
-        },
-        participants: {
-          select: {
-            id: true,
-            user: { select: { avatarUrl: true } },
+      const count = await prisma.pool.count({
+        where: {
+          participants: {
+            some: { userId },
           },
-          take: 4,
         },
-        _count: {
-          select: { participants: true },
+      });
+
+      return { count };
+    }
+  );
+
+  
+  fastify.get(
+    "/pools",
+    { preHandler: [requireAuth] },
+    async (request) => {
+      const userId = (request as any).userId as string;
+
+      const pools = await prisma.pool.findMany({
+        where: {
+          participants: {
+            some: { userId },
+          },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        select: {
+          id: true,
+          title: true,
+          code: true,
+          createdAt: true,
+          ownerId: true,
+          owner: {
+            select: { name: true },
+          },
+          participants: {
+            select: {
+              id: true,
+              user: { select: { avatarUrl: true } },
+            },
+            take: 4,
+          },
+          _count: {
+            select: { participants: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
 
-    return { pools };
-  });
+      return { pools };
+    }
+  );
 
-  // ===============================
-  // POST /pools  (criar bolão)
-  // ===============================
+ 
   fastify.post(
     "/pools",
     { preHandler: [requireAuth] },
@@ -82,9 +100,7 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // ===============================
-  // POST /pools/join
-  // ===============================
+  
   fastify.post(
     "/pools/join",
     { preHandler: [requireAuth] },
@@ -130,9 +146,7 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // ===============================
-  // GET /pools/:poolId (detalhes)
-  // ===============================
+  
   fastify.get(
     "/pools/:poolId",
     { preHandler: [requireAuth] },
@@ -183,37 +197,51 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // ===============================
-  // GET /pools/:poolId/games
-  // ===============================
-  fastify.get(
-    "/pools/:poolId/games",
-    { preHandler: [requireAuth] },
-    async (request, reply) => {
-      const paramsSchema = z.object({ poolId: z.string() });
-      const { poolId } = paramsSchema.parse(request.params);
+  fastify.delete(
+  "/pools/:poolId",
+  { preHandler: [requireAuth] },
+  async (request, reply) => {
+    const paramsSchema = z.object({ poolId: z.string() });
+    const { poolId } = paramsSchema.parse(request.params);
 
-      const userId = (request as any).userId as string;
+    const userId = (request as any).userId as string;
 
-      const participant = await prisma.participant.findUnique({
-        where: { userId_poolId: { userId, poolId } },
-      });
+    const pool = await prisma.pool.findUnique({
+      where: { id: poolId },
+      select: { id: true, ownerId: true },
+    });
 
-      if (!participant) {
-        return reply.code(404).send({ message: "Pool not found." });
-      }
+    if (!pool) {
+      return reply.code(404).send({ message: "Pool not found." });
+    }
 
-      const games = await prisma.game.findMany({
-        orderBy: { date: "asc" },
-        select: {
-          id: true,
-          date: true,
-          firstTeamCountryCode: true,
-          secondTeamCountryCode: true,
+    if (pool.ownerId !== userId) {
+      return reply.code(403).send({ message: "Only the owner can delete this pool." });
+    }
+
+   
+    await prisma.$transaction(async (tx) => {
+     
+      await tx.guess.deleteMany({
+        where: {
+          participant: { poolId },
         },
       });
 
-      return reply.send({ games });
-    }
-  );
+      
+      await tx.participant.deleteMany({
+        where: { poolId },
+      });
+
+     
+      await tx.pool.delete({
+        where: { id: poolId },
+      });
+    });
+
+    return reply.code(204).send();
+  }
+);
+
+  
 }
