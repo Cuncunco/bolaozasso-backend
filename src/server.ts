@@ -31,6 +31,10 @@ async function bootstrap() {
     prefix: "/uploads/",
   });
 
+  fastify.get("/", async () => {
+  return { ok: true, message: "Bolãozasso API online" };
+});
+
   await fastify.register(rankingRoutes);
   await fastify.register(poolRoutes);
   await fastify.register(authRoutes);
