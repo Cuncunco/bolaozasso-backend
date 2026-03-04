@@ -1,23 +1,18 @@
 {
   "compilerOptions": {
-    "module": "es2020",
-    "moduleResolution": "Bundler",
-    "target": "es2020",
-
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "strict": true,
+    "esModuleInterop": true,
     "types": ["node"],
-
     "rootDir": "src",
     "outDir": "dist",
-
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-
-    "esModuleInterop": true,
-    "strict": true,
     "verbatimModuleSyntax": false,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
