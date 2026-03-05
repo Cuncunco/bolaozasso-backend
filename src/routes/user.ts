@@ -7,17 +7,13 @@ import crypto from "crypto";
 import { z } from "zod";
 
 export async function userRoutes(fastify: FastifyInstance) {
-  // ===============================
-  // GET /users/count
-  // ===============================
+ 
   fastify.get("/users/count", async () => {
     const count = await prisma.user.count();
     return { count };
   });
 
-  // ===============================
-  // GET /me
-  // ===============================
+  
   fastify.get("/me", { preHandler: [requireAuth] }, async (request) => {
     const userId = (request as any).userId as string;
 
@@ -29,9 +25,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     return { user };
   });
 
-  // ===============================
-  // PUT /me  (atualiza nome)
-  // ===============================
+  
   fastify.put("/me", { preHandler: [requireAuth] }, async (request, reply) => {
     const userId = (request as any).userId as string;
 

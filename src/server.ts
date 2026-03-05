@@ -1,54 +1,61 @@
-import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-
-import path from "path";
 import multipart from "@fastify/multipart";
-import fastifyStatic from "@fastify/static";
+import staticPlugin from "@fastify/static";
+import path from "path";
 
-import { poolRoutes } from "./routes/pool.js";
-import { userRoutes } from "./routes/user.js";
-import { guessRoutes } from "./routes/guess.js";
-import { gameRoutes } from "./routes/game.js";
 import { authRoutes } from "./routes/auth.js";
+import { userRoutes } from "./routes/user.js";
+import { poolRoutes } from "./routes/pool.js";
+import { guessRoutes } from "./routes/guess.js";
 import { rankingRoutes } from "./routes/ranking.js";
+import { gameRoutes } from "./routes/game.js";
 
-async function bootstrap() {
-  const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: true });
 
-  await fastify.register(cors, {
-    origin: true,
-  });
 
-  await fastify.register(multipart, {
-    limits: {
-      fileSize: 5 * 1024 * 1024,
-    },
-  });
+await fastify.register(cors, {
+  origin: (origin, cb) => {
+  
+    if (!origin) return cb(null, true);
 
-  await fastify.register(fastifyStatic, {
-    root: path.resolve("uploads"),
-    prefix: "/uploads/",
-  });
+    const allowed = [
+      "http://localhost:8081",
+      "http://localhost:19006",
+      "http://localhost:3000",
+      "http://127.0.0.1:8081",
+      "http://127.0.0.1:19006",
+      "http://127.0.0.1:3000",
+     
+    ];
 
-  fastify.get("/", async () => {
-  return { ok: true, message: "Bolãozasso API online" };
+    if (allowed.includes(origin)) return cb(null, true);
+
+
+    return cb(new Error("Not allowed by CORS"), false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 
-  await fastify.register(rankingRoutes);
-  await fastify.register(poolRoutes);
-  await fastify.register(authRoutes);
-  await fastify.register(gameRoutes);
-  await fastify.register(guessRoutes);
-  await fastify.register(userRoutes);
 
-  const port = Number(process.env.PORT) || 3333;
-  fastify.get("/healthz", async () => ({ ok: true }));
+await fastify.register(multipart);
 
-  await fastify.listen({
-    port,
-    host: "0.0.0.0",
-  });
-}
+await fastify.register(staticPlugin, {
+  root: path.resolve("uploads"),
+  prefix: "/uploads/",
+});
 
-bootstrap();
+
+fastify.get("/health", async () => ({ ok: true }));
+
+await fastify.register(authRoutes);
+await fastify.register(userRoutes);
+await fastify.register(poolRoutes);
+await fastify.register(guessRoutes);
+await fastify.register(rankingRoutes);
+await fastify.register(gameRoutes);
+
+const port = Number(process.env.PORT ?? 3333);
+await fastify.listen({ port, host: "0.0.0.0" });
