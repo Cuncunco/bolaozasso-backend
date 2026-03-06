@@ -28,8 +28,8 @@ export async function userRoutes(fastify: FastifyInstance) {
     const passwordHash = await hash(password, 6);
 
     const user = await prisma.user.create({
-      data: {
-        name,
+            data: {
+        name: name ?? null,
         email,
         passwordHash,
       },

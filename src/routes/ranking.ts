@@ -1,7 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { z } from "zod";
-import { requireAuth } from "../middlewares/requireAuth.js";
 
 function pointsForGuess(
   g1: number,
@@ -26,101 +25,7 @@ function pointsForGuess(
 }
 
 export async function rankingRoutes(fastify: FastifyInstance) {
-
-  // 🔥 Definir resultado oficial
-  fastify.put(
-    "/pools/:poolId/games/:gameId/result",
-    { preHandler: [requireAuth] },
-    async (request, reply) => {
-
-      const paramsSchema = z.object({
-        poolId: z.string(),
-        gameId: z.string(),
-      });
-
-      const bodySchema = z.object({
-        firstTeamPoints: z.number().int().nonnegative(),
-        secondTeamPoints: z.number().int().nonnegative(),
-      });
-
-      const { poolId, gameId } = paramsSchema.parse(request.params);
-      const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
-
-      const userId = (request as any).userId as string;
-
-      // 🔒 Verifica se é dono do bolão
-      const pool = await prisma.pool.findUnique({
-        where: { id: poolId },
-        select: { ownerId: true },
-      });
-
-      if (!pool) {
-        return reply.code(404).send({ message: "Pool not found." });
-      }
-
-      if (pool.ownerId !== userId) {
-        return reply
-          .code(403)
-          .send({ message: "Apenas o admin pode definir o resultado." });
-      }
-
-      const result = await prisma.gameResult.upsert({
-        where: { gameId },
-        update: {
-          firstTeamPoints,
-          secondTeamPoints,
-        },
-        create: {
-          gameId,
-          firstTeamPoints,
-          secondTeamPoints,
-        },
-      });
-
-      return reply.send({ result });
-    }
-  );
-
-  // 🔓 Reabrir palpites (deletar resultado)
-  fastify.delete(
-    "/pools/:poolId/games/:gameId/result",
-    { preHandler: [requireAuth] },
-    async (request, reply) => {
-
-      const paramsSchema = z.object({
-        poolId: z.string(),
-        gameId: z.string(),
-      });
-
-      const { poolId, gameId } = paramsSchema.parse(request.params);
-      const userId = (request as any).userId as string;
-
-      const pool = await prisma.pool.findUnique({
-        where: { id: poolId },
-        select: { ownerId: true },
-      });
-
-      if (!pool) {
-        return reply.code(404).send({ message: "Pool not found." });
-      }
-
-      if (pool.ownerId !== userId) {
-        return reply
-          .code(403)
-          .send({ message: "Apenas o admin pode reabrir o jogo." });
-      }
-
-      await prisma.gameResult.delete({
-        where: { gameId },
-      });
-
-      return reply.code(204).send();
-    }
-  );
-
-  // 📊 Ranking
   fastify.get("/pools/:poolId/ranking", async (request, reply) => {
-
     const paramsSchema = z.object({ poolId: z.string() });
     const { poolId } = paramsSchema.parse(request.params);
 
@@ -136,13 +41,16 @@ export async function rankingRoutes(fastify: FastifyInstance) {
       where: { participant: { poolId } },
     });
 
-    const gameIds = Array.from(new Set(guesses.map(g => g.gameId)));
+    const gameIds = Array.from(new Set(guesses.map((g) => g.gameId)));
 
     const results = await prisma.gameResult.findMany({
-      where: { gameId: { in: gameIds } },
+      where: {
+        poolId,
+        gameId: { in: gameIds },
+      },
     });
 
-    const resultByGameId = new Map(results.map(r => [r.gameId, r]));
+    const resultByGameId = new Map(results.map((r) => [r.gameId, r]));
 
     const scoreByParticipant = new Map<string, number>();
 
@@ -169,7 +77,7 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     }
 
     const ranking = participants
-      .map(p => ({
+      .map((p) => ({
         participantId: p.id,
         user: p.user,
         points: scoreByParticipant.get(p.id) ?? 0,
