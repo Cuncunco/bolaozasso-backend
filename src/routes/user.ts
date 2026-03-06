@@ -5,15 +5,50 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { z } from "zod";
+import { hash } from "bcryptjs";
 
 export async function userRoutes(fastify: FastifyInstance) {
- 
+  fastify.post("/users", async (request, reply) => {
+    const bodySchema = z.object({
+      name: z.string().min(2).optional(),
+      email: z.string().email(),
+      password: z.string().min(6),
+    });
+
+    const { name, email, password } = bodySchema.parse(request.body);
+
+    const userAlreadyExists = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (userAlreadyExists) {
+      return reply.code(409).send({ message: "E-mail já cadastrado." });
+    }
+
+    const passwordHash = await hash(password, 6);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+      },
+    });
+
+    return reply.code(201).send({ user });
+  });
+
   fastify.get("/users/count", async () => {
     const count = await prisma.user.count();
     return { count };
   });
 
-  
   fastify.get("/me", { preHandler: [requireAuth] }, async (request) => {
     const userId = (request as any).userId as string;
 
@@ -25,7 +60,6 @@ export async function userRoutes(fastify: FastifyInstance) {
     return { user };
   });
 
-  
   fastify.put("/me", { preHandler: [requireAuth] }, async (request, reply) => {
     const userId = (request as any).userId as string;
 
@@ -44,9 +78,6 @@ export async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ user });
   });
 
-  // ===============================
-  // POST /me/avatar  (upload)
-  // ===============================
   fastify.post(
     "/me/avatar",
     { preHandler: [requireAuth] },
@@ -54,6 +85,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       const userId = (request as any).userId as string;
 
       const file = await request.file();
+
       if (!file) {
         return reply.code(400).send({ message: "Envie um arquivo 'avatar'." });
       }
@@ -66,7 +98,9 @@ export async function userRoutes(fastify: FastifyInstance) {
       }
 
       const uploadDir = path.resolve("uploads");
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
 
       const ext =
         file.mimetype === "image/png"
@@ -80,8 +114,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       await pumpToFile(file.file, filepath);
 
-      const host = request.headers.host; // ex: 192.168.1.35:3333
-      const avatarUrl = `http://${host}/uploads/${filename}`;
+      const host = request.headers["x-forwarded-host"] || request.headers.host;
+      const protocol = request.headers["x-forwarded-proto"] || "http";
+
+      const avatarUrl = `${protocol}://${host}/uploads/${filename}`;
 
       const user = await prisma.user.update({
         where: { id: userId },
@@ -94,7 +130,6 @@ export async function userRoutes(fastify: FastifyInstance) {
   );
 }
 
-// helper pra salvar stream
 function pumpToFile(stream: NodeJS.ReadableStream, filepath: string) {
   return new Promise<void>((resolve, reject) => {
     const write = fs.createWriteStream(filepath);
