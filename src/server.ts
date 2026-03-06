@@ -13,49 +13,58 @@ import { gameRoutes } from "./routes/game.js";
 
 const fastify = Fastify({ logger: true });
 
+async function bootstrap() {
+  await fastify.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
 
-await fastify.register(cors, {
-  origin: (origin, cb) => {
-  
-    if (!origin) return cb(null, true);
+      const allowed = [
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "http://localhost:3000",
+        "http://127.0.0.1:8081",
+        "http://127.0.0.1:19006",
+        "http://127.0.0.1:3000",
+        // quando publicar o front, adicione aqui:
+        // "https://seu-front.vercel.app",
+      ];
 
-    const allowed = [
-      "http://localhost:8081",
-      "http://localhost:19006",
-      "http://localhost:3000",
-      "http://127.0.0.1:8081",
-      "http://127.0.0.1:19006",
-      "http://127.0.0.1:3000",
-     
-    ];
+      if (allowed.includes(origin)) return cb(null, true);
 
-    if (allowed.includes(origin)) return cb(null, true);
+      return cb(new Error("Not allowed by CORS"), false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
 
+  await fastify.register(multipart);
 
-    return cb(new Error("Not allowed by CORS"), false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  await fastify.register(staticPlugin, {
+    root: path.resolve("uploads"),
+    prefix: "/uploads/",
+  });
+
+  fastify.get("/health", async () => ({ ok: true }));
+
+  await fastify.register(authRoutes);
+  await fastify.register(userRoutes);
+  await fastify.register(poolRoutes);
+  await fastify.register(guessRoutes);
+  await fastify.register(rankingRoutes);
+  await fastify.register(gameRoutes);
+
+  const port = Number(process.env.PORT ?? 3333);
+
+  await fastify.listen({
+    port,
+    host: "0.0.0.0",
+  });
+
+  fastify.log.info(`Server running on port ${port}`);
+}
+
+bootstrap().catch((err) => {
+  fastify.log.error(err);
+  process.exit(1);
 });
-
-
-await fastify.register(multipart);
-
-await fastify.register(staticPlugin, {
-  root: path.resolve("uploads"),
-  prefix: "/uploads/",
-});
-
-
-fastify.get("/health", async () => ({ ok: true }));
-
-await fastify.register(authRoutes);
-await fastify.register(userRoutes);
-await fastify.register(poolRoutes);
-await fastify.register(guessRoutes);
-await fastify.register(rankingRoutes);
-await fastify.register(gameRoutes);
-
-const port = Number(process.env.PORT ?? 3333);
-await fastify.listen({ port, host: "0.0.0.0" });

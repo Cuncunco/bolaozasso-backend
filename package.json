@@ -2,12 +2,13 @@
   "name": "bolaozasso-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/server.cjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsup src/server.ts --format cjs --dts",
-    "start": "node dist/server.cjs",
-    "migrate": "npx prisma migrate dev"
+    "build": "prisma generate && tsup src/server.ts --format cjs --dts",
+    "start": "prisma migrate deploy && node dist/server.cjs",
+    "migrate": "prisma migrate dev",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
