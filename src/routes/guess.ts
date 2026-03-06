@@ -4,7 +4,6 @@ import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 
 export async function guessRoutes(fastify: FastifyInstance) {
-
   fastify.get("/guesses/count", async () => {
     const count = await prisma.guess.count();
     return { count };
@@ -14,7 +13,6 @@ export async function guessRoutes(fastify: FastifyInstance) {
     "/pools/:poolId/games/:gameId/guesses",
     { preHandler: [requireAuth] },
     async (request, reply) => {
-
       const paramsSchema = z.object({
         poolId: z.string(),
         gameId: z.string(),
@@ -26,22 +24,27 @@ export async function guessRoutes(fastify: FastifyInstance) {
       });
 
       const { poolId, gameId } = paramsSchema.parse(request.params);
-      const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(request.body);
+      const { firstTeamPoints, secondTeamPoints } = bodySchema.parse(
+        request.body
+      );
 
       const userId = (request as any).userId as string;
 
-      // 🔒 Verifica se já existe resultado oficial
       const resultExists = await prisma.gameResult.findUnique({
-        where: { gameId },
+        where: {
+          poolId_gameId: {
+            poolId,
+            gameId,
+          },
+        },
       });
 
       if (resultExists) {
-        return reply
-          .code(409)
-          .send({ message: "Palpites encerrados: o resultado já foi definido." });
+        return reply.code(409).send({
+          message: "Palpites encerrados: o resultado já foi definido.",
+        });
       }
 
-      // 🔎 Buscar participante
       const participant = await prisma.participant.findUnique({
         where: {
           userId_poolId: { userId, poolId },
@@ -54,7 +57,6 @@ export async function guessRoutes(fastify: FastifyInstance) {
           .send({ message: "Você não participa desse bolão." });
       }
 
-      // 🔁 Cria ou atualiza palpite
       const guess = await prisma.guess.upsert({
         where: {
           participantId_gameId: {
