@@ -7,8 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsup src/server.ts --format cjs --dts",
     "start": "prisma migrate deploy && node dist/server.cjs",
-    "migrate": "prisma migrate dev",
-    "postinstall": "prisma generate"
+    "migrate": "prisma migrate dev"
   },
   "keywords": [],
   "author": "",
@@ -22,7 +21,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.2.0",
     "@types/pg": "^8.18.0",
-    "prisma": "^7.4.2",
+    "prisma": "6.19.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
@@ -30,8 +29,8 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^9.4.0",
     "@fastify/static": "^9.0.0",
-    "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^6.19.2",
+    "@prisma/adapter-pg": "6.19.2",
+    "@prisma/client": "6.19.2",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "fastify": "^5.7.2",
