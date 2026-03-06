@@ -9,10 +9,13 @@ datasource db {
 
 model GameResult {
   id               String   @id @default(cuid())
-  gameId           String   @unique
+  poolId           String
+  gameId           String
   firstTeamPoints  Int
   secondTeamPoints Int
   updatedAt        DateTime @updatedAt
+
+  @@unique([poolId, gameId])
 }
 
 model Pool {
