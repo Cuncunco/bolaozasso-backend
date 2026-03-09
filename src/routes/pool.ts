@@ -5,7 +5,6 @@ import ShortUniqueId from "short-unique-id";
 import { requireAuth } from "../middlewares/requireAuth.js";
 
 export async function poolRoutes(fastify: FastifyInstance) {
-  
   fastify.get(
     "/pools/count",
     { preHandler: [requireAuth] },
@@ -24,7 +23,6 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  
   fastify.get(
     "/pools",
     { preHandler: [requireAuth] },
@@ -64,7 +62,6 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
- 
   fastify.post(
     "/pools",
     { preHandler: [requireAuth] },
@@ -100,7 +97,6 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  
   fastify.post(
     "/pools/join",
     { preHandler: [requireAuth] },
@@ -132,7 +128,9 @@ export async function poolRoutes(fastify: FastifyInstance) {
       });
 
       if (participantExists) {
-        return reply.code(409).send({ message: "You already joined this pool." });
+        return reply
+          .code(409)
+          .send({ message: "You already joined this pool." });
       }
 
       await prisma.participant.create({
@@ -146,7 +144,6 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  
   fastify.get(
     "/pools/:poolId",
     { preHandler: [requireAuth] },
@@ -197,51 +194,112 @@ export async function poolRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.delete(
-  "/pools/:poolId",
-  { preHandler: [requireAuth] },
-  async (request, reply) => {
-    const paramsSchema = z.object({ poolId: z.string() });
-    const { poolId } = paramsSchema.parse(request.params);
+  fastify.post(
+    "/pools/:poolId/results",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const paramsSchema = z.object({
+        poolId: z.string(),
+      });
 
-    const userId = (request as any).userId as string;
+      const bodySchema = z.object({
+        gameId: z.string(),
+        firstTeamPoints: z.number().int().min(0),
+        secondTeamPoints: z.number().int().min(0),
+      });
 
-    const pool = await prisma.pool.findUnique({
-      where: { id: poolId },
-      select: { id: true, ownerId: true },
-    });
+      const { poolId } = paramsSchema.parse(request.params);
+      const { gameId, firstTeamPoints, secondTeamPoints } = bodySchema.parse(
+        request.body
+      );
 
-    if (!pool) {
-      return reply.code(404).send({ message: "Pool not found." });
-    }
+      const userId = (request as any).userId as string;
 
-    if (pool.ownerId !== userId) {
-      return reply.code(403).send({ message: "Only the owner can delete this pool." });
-    }
+      const pool = await prisma.pool.findUnique({
+        where: { id: poolId },
+        select: { id: true, ownerId: true },
+      });
 
-   
-    await prisma.$transaction(async (tx) => {
-     
-      await tx.guess.deleteMany({
+      if (!pool) {
+        return reply.code(404).send({ message: "Pool not found." });
+      }
+
+      if (pool.ownerId !== userId) {
+        return reply
+          .code(403)
+          .send({ message: "Only the owner can set the official result." });
+      }
+
+      await prisma.gameResult.upsert({
         where: {
-          participant: { poolId },
+          poolId_gameId: {
+            poolId,
+            gameId,
+          },
+        },
+        update: {
+          firstTeamPoints,
+          secondTeamPoints,
+        },
+        create: {
+          poolId,
+          gameId,
+          firstTeamPoints,
+          secondTeamPoints,
         },
       });
 
-      
-      await tx.participant.deleteMany({
-        where: { poolId },
+      return reply.code(201).send({
+        message: "Official result saved successfully.",
       });
+    }
+  );
 
-     
-      await tx.pool.delete({
+  fastify.delete(
+    "/pools/:poolId",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const paramsSchema = z.object({ poolId: z.string() });
+      const { poolId } = paramsSchema.parse(request.params);
+
+      const userId = (request as any).userId as string;
+
+      const pool = await prisma.pool.findUnique({
         where: { id: poolId },
+        select: { id: true, ownerId: true },
       });
-    });
 
-    return reply.code(204).send();
-  }
-);
+      if (!pool) {
+        return reply.code(404).send({ message: "Pool not found." });
+      }
 
-  
+      if (pool.ownerId !== userId) {
+        return reply
+          .code(403)
+          .send({ message: "Only the owner can delete this pool." });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.guess.deleteMany({
+          where: {
+            participant: { poolId },
+          },
+        });
+
+        await tx.participant.deleteMany({
+          where: { poolId },
+        });
+
+        await tx.gameResult.deleteMany({
+          where: { poolId },
+        });
+
+        await tx.pool.delete({
+          where: { id: poolId },
+        });
+      });
+
+      return reply.code(204).send();
+    }
+  );
 }
