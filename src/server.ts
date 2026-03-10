@@ -29,10 +29,10 @@ async function bootstrap() {
     prefix: "/uploads/",
   });
 
-  await fastify.register(uploadRoutes);
 
   fastify.get("/health", async () => ({ ok: true }));
 
+  await fastify.register(uploadRoutes);
   await fastify.register(authRoutes);
   await fastify.register(userRoutes);
   await fastify.register(poolRoutes);
