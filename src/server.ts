@@ -6,13 +6,13 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { join } from "node:path";
 
-import { uploadRoutes } from "./routes/upload.js";
-import { authRoutes } from "./routes/auth.js";
-import { userRoutes } from "./routes/user.js";
-import { poolRoutes } from "./routes/pool.js";
-import { guessRoutes } from "./routes/guess.js";
-import { rankingRoutes } from "./routes/ranking.js";
-import { gameRoutes } from "./routes/game.js";
+import { uploadRoutes } from "./routes/upload";
+import { authRoutes } from "./routes/auth";
+import { userRoutes } from "./routes/user";
+import { poolRoutes } from "./routes/pool";
+import { guessRoutes } from "./routes/guess";
+import { rankingRoutes } from "./routes/ranking";
+import { gameRoutes } from "./routes/game";
 
 const fastify = Fastify({ logger: true });
 
