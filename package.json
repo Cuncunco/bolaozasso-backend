@@ -5,7 +5,7 @@
   "main": "dist/server.cjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsup src/server.ts --format cjs --dts",
+    "build": "prisma generate && tsup src/server.ts --format cjs",
     "start": "prisma migrate deploy && node dist/server.cjs",
     "migrate": "prisma migrate dev"
   },
@@ -37,6 +37,7 @@
     "fastify": "^5.7.2",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.19.0",
+    "pump": "^3.0.3",
     "short-unique-id": "^5.3.2",
     "tsup": "^8.5.1",
     "zod": "^4.3.6"
