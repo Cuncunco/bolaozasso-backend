@@ -1,9 +1,12 @@
+import "dotenv/config";
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
-import staticPlugin from "@fastify/static";
-import path from "path";
+import fastifyStatic from "@fastify/static";
+import { join } from "node:path";
 
+import { uploadRoutes } from "./routes/upload.js";
 import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/user.js";
 import { poolRoutes } from "./routes/pool.js";
@@ -14,17 +17,19 @@ import { gameRoutes } from "./routes/game.js";
 const fastify = Fastify({ logger: true });
 
 async function bootstrap() {
+
   await fastify.register(cors, {
     origin: true,
-    credentials: true,
   });
 
   await fastify.register(multipart);
 
-  await fastify.register(staticPlugin, {
-    root: path.resolve("uploads"),
+  await fastify.register(fastifyStatic, {
+    root: join(process.cwd(), "uploads"),
     prefix: "/uploads/",
   });
+
+  await fastify.register(uploadRoutes);
 
   fastify.get("/health", async () => ({ ok: true }));
 
@@ -45,7 +50,4 @@ async function bootstrap() {
   fastify.log.info(`Server running on port ${port}`);
 }
 
-bootstrap().catch((err) => {
-  fastify.log.error(err);
-  process.exit(1);
-});
+bootstrap();
