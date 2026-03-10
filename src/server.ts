@@ -17,7 +17,6 @@ import { gameRoutes } from "./routes/game";
 const fastify = Fastify({ logger: true });
 
 async function bootstrap() {
-
   await fastify.register(cors, {
     origin: true,
   });
@@ -29,8 +28,9 @@ async function bootstrap() {
     prefix: "/uploads/",
   });
 
-
   fastify.get("/health", async () => ({ ok: true }));
+
+  fastify.get("/debug-upload", async () => ({ upload: "registered" }));
 
   await fastify.register(uploadRoutes);
   await fastify.register(authRoutes);
@@ -50,4 +50,7 @@ async function bootstrap() {
   fastify.log.info(`Server running on port ${port}`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  fastify.log.error(err);
+  process.exit(1);
+});
