@@ -8,25 +8,31 @@ datasource db {
 }
 
 model GameResult {
-  id               String   @id @default(cuid())
-  poolId           String
-  gameId           String
-  firstTeamPoints  Int
-  secondTeamPoints Int
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  poolId            String
+  gameId            String
+  firstTeamPoints   Int
+  secondTeamPoints  Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  pool              Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
 
   @@unique([poolId, gameId])
 }
 
 model Pool {
-  id        String   @id @default(cuid())
-  title     String
-  code      String   @unique
-  createdAt DateTime @default(now())
-  ownerId   String?
+  id           String        @id @default(cuid())
+  title        String
+  code         String        @unique
+  createdAt    DateTime      @default(now())
+  ownerId      String?
 
   participants Participant[]
-  owner        User?         @relation(fields: [ownerId], references: [id])
+  results      GameResult[]
+  guesses      Guess[]
+
+  owner        User?         @relation("PoolOwner", fields: [ownerId], references: [id])
 }
 
 model Participant {
@@ -34,36 +40,37 @@ model Participant {
   userId String
   poolId String
 
-  guesses Guess[]
-
-  user User @relation(fields: [userId], references: [id])
-  pool Pool @relation(fields: [poolId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pool Pool @relation(fields: [poolId], references: [id], onDelete: Cascade)
 
   @@unique([userId, poolId])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String?
-  email        String   @unique
-  passwordHash String
-  avatarUrl    String?
-  createdAt    DateTime @default(now())
+  id              String        @id @default(cuid())
+  name            String?
+  email           String        @unique
+  passwordHash    String
+  avatarUrl       String?
+  createdAt       DateTime      @default(now())
 
   participatingAt Participant[]
-  ownPools        Pool[]
+  ownPools        Pool[]        @relation("PoolOwner")
+  guesses         Guess[]
 }
 
 model Guess {
-  id               String   @id @default(cuid())
-  firstTeamPoints  Int
-  secondTeamPoints Int
-  createdAt        DateTime @default(now())
+  id                String   @id @default(cuid())
+  poolId            String
+  gameId            String
+  userId            String
+  firstTeamPoints   Int
+  secondTeamPoints  Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  gameId        String
-  participantId String
+  pool              Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  participant Participant @relation(fields: [participantId], references: [id])
-
-  @@unique([participantId, gameId])
+  @@unique([poolId, gameId, userId])
 }
