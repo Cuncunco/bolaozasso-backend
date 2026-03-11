@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../lib/prisma";
 import { z } from "zod";
 
 function pointsForGuess(
@@ -8,10 +8,8 @@ function pointsForGuess(
   r1: number,
   r2: number
 ): number {
-  // 3 pontos: placar exato
   if (g1 === r1 && g2 === r2) return 3;
 
-  // 1 ponto: acertou vencedor/empate
   const guessDiff = g1 - g2;
   const realDiff = r1 - r2;
 
@@ -26,19 +24,28 @@ function pointsForGuess(
 
 export async function rankingRoutes(fastify: FastifyInstance) {
   fastify.get("/pools/:poolId/ranking", async (request, reply) => {
-    const paramsSchema = z.object({ poolId: z.string() });
+    const paramsSchema = z.object({
+      poolId: z.string(),
+    });
+
     const { poolId } = paramsSchema.parse(request.params);
 
     const participants = await prisma.participant.findMany({
       where: { poolId },
       select: {
-        id: true,
-        user: { select: { id: true, name: true, avatarUrl: true } },
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
     const guesses = await prisma.guess.findMany({
-      where: { participant: { poolId } },
+      where: { poolId },
     });
 
     const gameIds = Array.from(new Set(guesses.map((g) => g.gameId)));
@@ -51,21 +58,20 @@ export async function rankingRoutes(fastify: FastifyInstance) {
     });
 
     const resultByGameId = new Map(results.map((r) => [r.gameId, r]));
-
-    const scoreByParticipant = new Map<string, number>();
+    const scoreByUserId = new Map<string, number>();
 
     for (const p of participants) {
-      scoreByParticipant.set(p.id, 0);
+      scoreByUserId.set(p.userId, 0);
     }
 
     for (const g of guesses) {
       const result = resultByGameId.get(g.gameId);
       if (!result) continue;
 
-      const current = scoreByParticipant.get(g.participantId) ?? 0;
+      const current = scoreByUserId.get(g.userId) ?? 0;
 
-      scoreByParticipant.set(
-        g.participantId,
+      scoreByUserId.set(
+        g.userId,
         current +
           pointsForGuess(
             g.firstTeamPoints,
@@ -78,9 +84,9 @@ export async function rankingRoutes(fastify: FastifyInstance) {
 
     const ranking = participants
       .map((p) => ({
-        participantId: p.id,
+        userId: p.userId,
         user: p.user,
-        points: scoreByParticipant.get(p.id) ?? 0,
+        points: scoreByUserId.get(p.userId) ?? 0,
       }))
       .sort((a, b) => b.points - a.points)
       .map((row, idx) => ({

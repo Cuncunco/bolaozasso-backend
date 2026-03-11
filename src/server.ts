@@ -18,8 +18,10 @@ const fastify = Fastify({ logger: true });
 
 async function bootstrap() {
   await fastify.register(cors, {
-    origin: true,
-  });
+  origin: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+});
 
   await fastify.register(multipart);
 

@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../lib/prisma";
 import { z } from "zod";
 import ShortUniqueId from "short-unique-id";
-import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAuth } from "../middlewares/requireAuth";
 
 export async function poolRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -282,7 +282,7 @@ export async function poolRoutes(fastify: FastifyInstance) {
       await prisma.$transaction(async (tx) => {
         await tx.guess.deleteMany({
           where: {
-            participant: { poolId },
+            poolId,
           },
         });
 

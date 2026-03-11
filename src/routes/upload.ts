@@ -1,10 +1,15 @@
 import { FastifyInstance } from "fastify";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { extname } from "node:path";
-import pump from "pump";
+import { pipeline } from "node:stream/promises";
 
 export async function uploadRoutes(fastify: FastifyInstance) {
   fastify.post("/upload", async (request, reply) => {
+    // Verifica se é multipart
+    if (!request.isMultipart()) {
+      return reply.status(406).send({ message: "Request must be multipart" });
+    }
+
     const data = await request.file();
 
     if (!data) {
@@ -17,10 +22,11 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     const fileName = `${Date.now()}${fileExt}`;
     const filePath = `uploads/${fileName}`;
 
-    await pump(data.file, createWriteStream(filePath));
+    await pipeline(data.file, createWriteStream(filePath));
 
-    const fileUrl = `${request.protocol}://${request.hostname}/uploads/${fileName}`;
+    const baseUrl = process.env.BASE_URL ?? `${request.protocol}://${request.hostname}`;
+    const fileUrl = `${baseUrl}/uploads/${fileName}`;
 
     return reply.send({ fileUrl });
   });
-}
+}   

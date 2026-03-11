@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../lib/prisma";
 import { z } from "zod";
-import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAuth } from "../middlewares/requireAuth";
 
 export async function userRoutes(fastify: FastifyInstance) {
   fastify.get("/me", { preHandler: [requireAuth] }, async (request, reply) => {

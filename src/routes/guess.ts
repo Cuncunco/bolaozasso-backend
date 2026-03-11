@@ -1,26 +1,23 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../lib/prisma";
 import { z } from "zod";
-import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAuth } from "../middlewares/requireAuth";
 
 export async function guessRoutes(fastify: FastifyInstance) {
-  fastify.get("/guesses/count", async () => {
-    const count = await prisma.guess.count();
-    return { count };
-  });
-
   fastify.post(
     "/pools/:poolId/games/:gameId/guesses",
     { preHandler: [requireAuth] },
     async (request, reply) => {
+      console.log("=== ROTA NOVA DE GUESS EXECUTANDO ===");
+
       const paramsSchema = z.object({
         poolId: z.string(),
         gameId: z.string(),
       });
 
       const bodySchema = z.object({
-        firstTeamPoints: z.number(),
-        secondTeamPoints: z.number(),
+        firstTeamPoints: z.number().int().min(0),
+        secondTeamPoints: z.number().int().min(0),
       });
 
       const { poolId, gameId } = paramsSchema.parse(request.params);
@@ -47,21 +44,25 @@ export async function guessRoutes(fastify: FastifyInstance) {
 
       const participant = await prisma.participant.findUnique({
         where: {
-          userId_poolId: { userId, poolId },
+          userId_poolId: {
+            userId,
+            poolId,
+          },
         },
       });
 
       if (!participant) {
-        return reply
-          .status(404)
-          .send({ message: "Você não participa desse bolão." });
+        return reply.status(404).send({
+          message: "Você não participa desse bolão.",
+        });
       }
 
       const guess = await prisma.guess.upsert({
         where: {
-          participantId_gameId: {
-            participantId: participant.id,
+          poolId_gameId_userId: {
+            poolId,
             gameId,
+            userId,
           },
         },
         update: {
@@ -69,14 +70,58 @@ export async function guessRoutes(fastify: FastifyInstance) {
           secondTeamPoints,
         },
         create: {
+          poolId,
+          gameId,
+          userId,
           firstTeamPoints,
           secondTeamPoints,
-          gameId,
-          participantId: participant.id,
         },
       });
 
-      return reply.status(201).send(guess);
+      return reply.status(201).send({
+        message: "Palpite salvo com sucesso.",
+        guess,
+      });
+    }
+  );
+
+  fastify.get(
+    "/pools/:poolId/guesses",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const paramsSchema = z.object({
+        poolId: z.string(),
+      });
+
+      const { poolId } = paramsSchema.parse(request.params);
+      const userId = (request as any).userId as string;
+
+      const participant = await prisma.participant.findUnique({
+        where: {
+          userId_poolId: {
+            userId,
+            poolId,
+          },
+        },
+      });
+
+      if (!participant) {
+        return reply.status(404).send({
+          message: "Você não participa desse bolão.",
+        });
+      }
+
+      const guesses = await prisma.guess.findMany({
+        where: {
+          poolId,
+          userId,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+
+      return reply.send({ guesses });
     }
   );
 }
